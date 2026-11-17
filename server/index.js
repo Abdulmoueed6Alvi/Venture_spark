@@ -15,6 +15,24 @@ app.use(morgan("dev"));
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+// Diagnostic: protected by JWT_SECRET header, always sends only to SMTP_USER (the owner).
+app.post("/api/diagnostics/test-email", async (req, res) => {
+  if (!process.env.JWT_SECRET || req.headers["x-diag-secret"] !== process.env.JWT_SECRET) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    const { sendMail } = await import("./lib/mailer.js");
+    const info = await sendMail({
+      to: process.env.SMTP_USER,
+      subject: "Venture Spark: LIVE server test email",
+      html: "<h2>Venture Spark</h2><p>Ye email Render (live backend) se aayi hai ✅</p>",
+    });
+    res.json({ ok: true, messageId: info.messageId });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 const port = process.env.PORT || 5000;
 mongoose
   .connect(process.env.MONGO_URI)
