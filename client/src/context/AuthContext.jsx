@@ -11,6 +11,7 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase";
 import { driveToken } from "../lib/api";
+import { driveOAuthConfigured, requestDriveToken } from "../lib/googleDrive";
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -29,6 +30,10 @@ const FRIENDLY = {
   "auth/unauthorized-domain": "This website is not authorised for sign-in yet.",
   "auth/account-exists-with-different-credential": "This email is registered with a password. Sign in with your password instead.",
   "auth/network-request-failed": "Network error. Check your connection.",
+  "gis/popup_closed": "Google Drive connection was cancelled.",
+  "gis/popup_failed_to_open": "Your browser blocked the Google popup. Allow popups and try again.",
+  "gis/access_denied": "Google Drive access was not allowed.",
+  "gis/load-failed": "Could not load Google sign-in. Check your connection.",
 };
 export const authErrorMessage = (e) => FRIENDLY[e?.code] || "Something went wrong. Please try again.";
 
@@ -41,10 +46,20 @@ export function AuthProvider({ children }) {
 
   const googleSignIn = useCallback(async () => {
     const result = await signInWithPopup(auth, googleProvider);
-    const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
-    if (token) { driveToken.set(token); setDriveConnected(true); }
+    // Without a dedicated Drive OAuth client, reuse the Firebase Google token for Drive.
+    if (!driveOAuthConfigured) {
+      const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+      if (token) { driveToken.set(token); setDriveConnected(true); }
+    }
     return result.user;
   }, []);
+
+  const connectDrive = useCallback(async () => {
+    if (!driveOAuthConfigured) return googleSignIn();
+    const token = await requestDriveToken(auth.currentUser?.email);
+    driveToken.set(token);
+    setDriveConnected(true);
+  }, [googleSignIn]);
 
   const value = useMemo(
     () => ({
@@ -52,7 +67,7 @@ export function AuthProvider({ children }) {
       loading,
       driveConnected,
       googleSignIn,
-      connectDrive: googleSignIn,
+      connectDrive,
       async emailSignIn(email, password) { await signInWithEmailAndPassword(auth, email, password); },
       async emailSignUp(name, email, password) {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
@@ -61,7 +76,7 @@ export function AuthProvider({ children }) {
       async logout() { driveToken.clear(); setDriveConnected(false); await signOut(auth); },
       markDriveExpired() { driveToken.clear(); setDriveConnected(false); },
     }),
-    [user, loading, driveConnected, googleSignIn],
+    [user, loading, driveConnected, googleSignIn, connectDrive],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

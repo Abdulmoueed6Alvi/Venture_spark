@@ -13,6 +13,7 @@ const app = initializeApp({
 export const auth = getAuth(app);
 
 // drive.file = the app can only see files it created itself (least-privilege Drive scope).
+// When a dedicated Drive OAuth client is configured, Drive access is requested separately (lib/googleDrive.js).
 export const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope("https://www.googleapis.com/auth/drive.file");
+if (!import.meta.env.VITE_GOOGLE_CLIENT_ID) googleProvider.addScope("https://www.googleapis.com/auth/drive.file");
 googleProvider.setCustomParameters({ prompt: "select_account" });
