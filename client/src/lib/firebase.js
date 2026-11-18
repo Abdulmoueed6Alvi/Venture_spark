@@ -11,4 +11,8 @@ const app = initializeApp({
 });
 
 export const auth = getAuth(app);
+
+// drive.file = the app can only see files it created itself (least-privilege Drive scope).
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope("https://www.googleapis.com/auth/drive.file");
+googleProvider.setCustomParameters({ prompt: "select_account" });
